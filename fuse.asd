@@ -1,10 +1,11 @@
-;;;; whatevs.asd
+;;;; fuse.asd
 
-(asdf:defsystem #:whatevs
+(asdf:defsystem #:fuse
   :description "Generate Fuse Apps from lisp"
   :author "Chris Bagley (Baggers) <techsnuffle@gmail.com>"
   :license "GPLv3"
-  :depends-on (:alexandria :parenscript :xmls :uiop :fn :cffi :cl-ppcre)
+  :depends-on (:alexandria :parenscript :xmls :uiop :fn :cffi :cl-ppcre
+                           :bordeaux-threads)
   :serial t
   :components ((:file "package")
                (:file "std-lib")

@@ -1,7 +1,12 @@
 (in-package :fuse.controls)
 
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter std-lib-name-map
+    '((float2 "float4")
+      (float3 "float4")
+      (float4 "float4")))
+  (defparameter std-lib-macro-map
     '((activated "Activated")
       (activating-animation "ActivatingAnimation")
       (adding-animation "AddingAnimation")
@@ -123,9 +128,9 @@
       (render-to-texture "RenderToTexture")
       (resource-bool "ResourceBool")
       (resource-float "ResourceFloat")
-      (resource-float-2 "ResourceFloat2")
-      (resource-float-3 "ResourceFloat3")
-      (resource-float-4 "ResourceFloat4")
+      (resource-float2 "ResourceFloat2")
+      (resource-float3 "ResourceFloat3")
+      (resource-float4 "ResourceFloat4")
       (resource-object "ResourceObject")
       (resource-string "ResourceString")
       (resources "Resources")
@@ -229,7 +234,7 @@
 
 (defmacro dumb-macro-shiz ()
   `(progn
-     ,@(loop :for (s n) :in std-lib-name-map :collect
+     ,@(loop :for (s n) :in std-lib-macro-map :collect
           `(defmacro ,s (args &body body)
              (append (list ,n args) body)))))
 

@@ -1,4 +1,4 @@
-(in-package #:whatevs)
+(in-package #:fuse)
 (in-readtable :fn.reader)
 
 ;;------------------------------------------------------------
@@ -29,10 +29,26 @@
 
 (defvar *js-funcs-used*)
 (defvar *js-vars-used*)
+(defvar *properties* nil)
+(defvar *dependencies* nil)
 
 (defun calc-js-files-used (vars-used funcs-used)
   (append (mapcar λ(var-name-to-js-filename _ nil) vars-used)
           (mapcar λ(func-name-to-js-filename _ nil) funcs-used)))
+
+(defvar *preview* nil)
+
+(defun preview-app ()
+  (let ((dir (fuse-build-dir)))
+    (if (and *preview* (thread-alive-p *preview*))
+        (warn "preview is already running")
+        (setf *preview* (make-thread λ(%run-preview dir) :name "Fuse-Preview")))))
+
+(defun %run-preview (dir)
+  (with-open-stream (o (make-string-output-stream))
+    (with-open-stream (eo (make-string-output-stream))
+      (uiop:run-program (format nil "fuse preview ~a &" dir)
+                        :output o :error-output eo))))
 
 (defmacro def-fuse-app ((&key todo) &body body-form)
   (declare (ignore todo))
@@ -60,14 +76,16 @@
   `(%ux-comp ',name ',properties ',dependencies ',(first body-form)))
 
 (defun %ux-comp (name properties dependencies body)
-  (declare (ignore properties dependencies))
+  (declare (ignore dependencies))
   (with-dbg-print
     (let* ((*js-vars-used* nil)
            (*js-funcs-used* nil)
+           (*properties* (mapcar #'first properties))
            (body (process-ux body))
            (js-imports (let ((files (calc-js-files-used *js-vars-used* *js-funcs-used*)))
                          (mapcar λ`("JavaScript" (("File" ,(namestring _)))) files)))
            (code (add-ux-class-name name body))
+           (code (add-properties-to-component code properties))
            (code (add-imports-to-component code js-imports))
            (ux (code-to-ux code))
            (filename (comp-name-to-ux-filename name)))
@@ -84,6 +102,22 @@
           js-imports
           (subseq code 2)))
 
+(defun add-properties-to-component (code properties)
+  (let* ((properties (mapcar λ(dbind (name val type) _
+                                `(,(name-to-camel name nil)
+                                   ,val
+                                   ,(name-to-camel type)))
+                              properties))
+         (args (mapcar λ(subseq _ 0 2) properties))
+         (decls (mapcar λ(dbind (name val type) _
+                           (declare (ignore val))
+                           `(,type (("ux:Property" ,name))))
+                        properties)))
+    `(,(first code)
+       ,(append (second code) args)
+       ,@decls
+       ,@(subseq code 2))))
+
 ;;------------------------------------------------------------
 
 (defun process-args (args)
@@ -94,12 +128,14 @@
 (defun var-to-ref (symb)
   (format nil "{~a}" (name-to-camel symb nil)))
 
+(defun var-to-prop (symb)
+  (format nil "{Property this.~a}" (name-to-camel symb nil)))
+
 (defun process-arg-symbol (symb)
-  (if (find symb *js-vars*)
-      (progn
-        (pushnew symb *js-vars-used*)
-        (var-to-ref symb))
-      (name-to-camel symb)))
+  (cond
+    ((find symb *properties*) (var-to-prop symb))
+    ((find symb *js-vars*) (pushnew symb *js-vars-used*) (var-to-ref symb))
+    (t (name-to-camel symb))))
 
 (defmethod process-ux ((code list))
   (let* ((head (first code))

@@ -242,10 +242,14 @@
    :zoom-gesture
    ;;--
    :observable
+   :float2
+   :float3
+   :float4
    ))
 
-(uiop:define-package #:whatevs
-    (:use #:cl :xmls :uiop :fn :named-readtables :cl-ppcre :fuse.controls)
+(uiop:define-package #:fuse
+    (:use #:cl :xmls :uiop :fn :named-readtables :cl-ppcre :fuse.controls
+          :bordeaux-threads)
 
   ;;(:import-from :alexandria)
   )
