@@ -1,7 +1,7 @@
 (in-package #:whatevs)
 (in-readtable :fn.reader)
 
-g(defun symbol->ux-name (symbol &optional (qualify t))
+(defun symbol->ux-name (symbol &optional (qualify t))
   (format nil "~@[~a.~]~a" (when qualify (package-name (symbol-package symbol)))
           (cffi:translate-name-to-foreign symbol (symbol-package symbol))))
 
