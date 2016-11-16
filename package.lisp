@@ -242,7 +242,7 @@
    :zoom-gesture))
 
 (uiop:define-package #:whatevs
-    (:use #:cl :xmls :uiop :fn :named-readtables :cl-ppcre :fuse.control)
+    (:use #:cl :xmls :uiop :fn :named-readtables :cl-ppcre :fuse.controls)
 
   ;;(:import-from :alexandria)
   )

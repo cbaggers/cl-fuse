@@ -7,6 +7,7 @@
   :depends-on (:alexandria :parenscript :xmls :uiop :fn :cffi :cl-ppcre)
   :serial t
   :components ((:file "package")
+               (:file "std-lib")
                (:file "utils")
                (:file "file-shiz")
                (:file "base")))

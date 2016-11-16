@@ -78,18 +78,15 @@
 
 ;;------------------------------------------------------------
 
-(debug-ux
-  (ux-app ()
-    (stack-panel ()
-                 (text (:color :blue) "Hi there. This is a project")
-                 (text (:color :red) "testing")
-                 (text (:color :red) "yip!"))))
+(debug-ux)
+(ux-app ()
+  (stack-panel ()
+    (text (:color :blue) "Hi there. This is a dumb project")
+    (text (:color :red) "testing")
+    (text (:color :red) "yip!")))
 
 (debug-ux
   (ux-comp my-comp () ()
     (panel (:color "Yellow")
-           (while-pressed ()
-                          (scale (:factor 2 :duration 0.3 :easing :back-out))))))
-
-
-"Fuse.Controls.Panel"
+      (while-pressed ()
+        (scale (:factor 2 :duration 0.3 :easing :back-out))))))
