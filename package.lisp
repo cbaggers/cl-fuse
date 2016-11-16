@@ -239,7 +239,10 @@
    :while-window-size
    :with
    :wrap-panel
-   :zoom-gesture))
+   :zoom-gesture
+   ;;--
+   :observable
+   ))
 
 (uiop:define-package #:whatevs
     (:use #:cl :xmls :uiop :fn :named-readtables :cl-ppcre :fuse.controls)

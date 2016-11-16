@@ -233,3 +233,7 @@
              (append (list ,n args) body)))))
 
 (dumb-macro-shiz)
+
+
+(parenscript:defpsmacro observable (&rest args)
+  `(#:|Observable| ,@args))
