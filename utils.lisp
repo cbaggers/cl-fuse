@@ -55,3 +55,6 @@
     (if source
 	(rec source nil)
 	nil)))
+
+(defun n-of (n x)
+  (loop :for i :below n :collect x))

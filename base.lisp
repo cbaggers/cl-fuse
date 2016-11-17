@@ -201,14 +201,55 @@
 
 ;;------------------------------------------------------------
 
+(defparameter *js-funcs* nil)
+(defparameter *js-vars* nil)
+
+(defun notice-js-var-name (name)
+  (pushnew name *js-vars*)
+  name)
+
+(defun forget-js-var-name (name)
+  (setf *js-vars* (remove name *js-vars*))
+  name)
+
+(defun notice-js-func-name (name)
+  (pushnew name *js-funcs*)
+  name)
+
+(defun forget-js-func-name (name)
+  (setf *js-funcs* (remove name *js-funcs*))
+  name)
+
+(defun sweep-for-vars (code)
+  (remove-duplicates
+   (remove-if-not λ(find _ *js-vars*) (flatten code))))
+
+(defun sweep-for-funcs (code)
+  (remove-duplicates
+   (remove-if-not λ(find _ *js-funcs*) (flatten code))))
+
+(defun gen-js-requires (code package-requires)
+  (append (mapcar λ(dbind (req var) _
+                     `(defvar ,var (parenscript:getprop (require ,req)
+                                                        ,(name-to-camel var nil))))
+                  (append (mapcar λ`(,(func-name-to-js-filename _ nil) ,_)
+                                  (sweep-for-funcs code))
+                          (mapcar λ`(,(var-name-to-js-filename _ nil) ,_)
+                                  (sweep-for-vars code))))
+          (mapcar λ(dbind (req var) _
+                     `(defvar ,var (require ,req)))
+          package-requires)))
+
+;;------------------------------------------------------------
+
 (defmacro def-js-func (name args &body body)
   (let ((req (find-symbol "*PACKAGE-JS-REQUIRES*" (symbol-package name))))
+    (unless *debug* (notice-js-func-name name))
     `(%def-js-func ',name ',args ',body ,req)))
 
 (defun gen-js-func-code (name args body requires)
   `(progn
-     ,@(mapcar λ(dbind (req var) _ `(defvar ,var (require ,req)))
-               requires)
+     ,@(gen-js-requires body requires)
      (defun ,name ,args ,@body)
      (setf (parenscript:chain module exports ,(name-to-camel name nil)) ,name)))
 
@@ -223,29 +264,19 @@
 
 ;;------------------------------------------------------------
 
-(defparameter *js-vars* nil)
 
-(defun notice-js-var-name (name)
-  (pushnew name *js-vars*)
-  name)
-
-(defun forget-js-var-name (name)
-  (setf *js-vars* (remove name *js-vars*))
-  name)
 
 (defmacro def-js-var (name form)
   (if form
       (let ((req (find-symbol "*PACKAGE-JS-REQUIRES*" (symbol-package name))))
-        (unless *debug*
-          (notice-js-var-name name))
+        (unless *debug* (notice-js-var-name name))
         `(%def-js-var ',name ',form ,req))
       (unless *debug*
         (forget-js-var-name name))))
 
 (defun gen-js-var-code (name form requires)
   `(progn
-     ,@(mapcar λ(dbind (req var) _
-                  `(defvar ,var (require ,req))) requires)
+     ,@(gen-js-requires form requires)
      (setf (parenscript:chain module exports ,(name-to-camel name nil)) ,form)))
 
 

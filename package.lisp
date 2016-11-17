@@ -258,4 +258,6 @@
            :def-js-requires
            :def-js-func
            :def-js-var)
+  (:import-from :alexandria
+                :flatten)
   (:reexport :fuse.controls))
