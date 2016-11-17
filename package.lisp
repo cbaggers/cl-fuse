@@ -261,5 +261,6 @@
            :def
            :->)
   (:import-from :alexandria
-                :flatten)
+                :flatten
+                :iota)
   (:reexport :fuse.controls))

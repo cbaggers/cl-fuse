@@ -26,7 +26,10 @@
                        :direction :output
                        :if-exists :supersede
                        :if-does-not-exist :create)
-      (format s "~a" js-code))))
+      (format s "//~a~%~a" (gen-tag) js-code))))
+
+(defun gen-tag ()
+  (format nil "~{~a~^-~}}"(reverse (subseq (multiple-value-list (get-decoded-time)) 0 6))))
 
 (defun comp-name-to-ux-filename (name &optional (absolute t))
   (let ((name (concatenate 'string (regex-replace-all "\\." (symbol->ux-name name) "_")

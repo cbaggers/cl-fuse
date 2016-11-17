@@ -35,6 +35,7 @@
 
 (defvar *js-funcs-used*)
 (defvar *js-vars-used*)
+(defvar *js-inline-forms*)
 (defvar *properties* nil)
 (defvar *dependencies* nil)
 
@@ -89,7 +90,8 @@
 
 (defun %ux-app (body)
   (let* ((*js-vars-used* nil)
-         (body (process-ux body))
+         (*js-inline-forms* nil)
+         (body (process-ux body nil))
          (imp-name 'app-mainview)
          (js-imports (let ((file (gen-ux-js-import-file imp-name *js-vars-used*)))
                        (when file
@@ -98,6 +100,7 @@
                        ,@js-imports
                        ,body))
          (ux (code-to-ux code)))
+    (write-inline-forms *js-inline-forms*)
     (unless *debug*
       (write-to-ux-file *app-file-name* ux))))
 
@@ -110,6 +113,18 @@
 
 ;;------------------------------------------------------------
 
+(defun write-inline-forms (inline-forms)
+  (let* ((req-symb (find-symbol "*PACKAGE-JS-REQUIRES*" *package*))
+         (req (when req-symb (symbol-value req-symb))))
+    (mapcar λ(%def-js-var (first _) `(symbol-macrolet
+                                         ,(loop :for v :in *js-vars* :collect
+                                             `(,(intern (format nil "^~a" v))
+                                                (-> ,v 'value)))
+                                      (observable (lambda () ,(second _)))) req)
+            inline-forms)))
+
+;;------------------------------------------------------------
+
 (defmacro def-ux-component (name properties dependencies &body body-form)
   (assert (= (length body-form) 1))
   `(%ux-comp ',name ',properties ',dependencies ',(first body-form)))
@@ -117,8 +132,9 @@
 (defun %ux-comp (name properties dependencies body)
   (declare (ignore dependencies))
   (let* ((*js-vars-used* nil)
+         (*js-inline-forms* nil)
          (*properties* (mapcar #'first properties))
-         (body (process-ux body))
+         (body (process-ux body nil))
          (imp-name (make-symbol (format nil "component-~a" name)))
          (js-imports (let ((file (gen-ux-js-import-file imp-name *js-vars-used*)))
                        (when file
@@ -128,6 +144,7 @@
          (code (add-imports-to-component code js-imports))
          (ux (code-to-ux code))
          (filename (comp-name-to-ux-filename name)))
+    (write-inline-forms *js-inline-forms*)
     (if *debug*
         (format t "~%Will write to ~a" filename)
         (write-to-ux-file filename ux))))
@@ -159,9 +176,11 @@
 
 ;;------------------------------------------------------------
 
-(defun process-args (args)
+(defun process-args (args path)
   (when args
-    (group (mapcar λ(if (symbolp _) (process-arg-symbol _) _) args)
+    (group (mapcar λ(process-ux-arg _ (cons _1 path))
+                   args
+                   (iota (length args)))
            2)))
 
 (defun var-to-ref (symb)
@@ -170,28 +189,37 @@
 (defun var-to-prop (symb)
   (format nil "{Property this.~a}" (name-to-camel symb nil)))
 
-(defun process-arg-symbol (symb)
+(defmethod process-ux-arg ((symb symbol) path)
   (cond
     ((find symb *properties*) (var-to-prop symb))
+    ((find symb *js-vars-used*) (var-to-ref symb))
     ((find symb *js-vars*) (pushnew symb *js-vars-used*) (var-to-ref symb))
     (t (name-to-camel symb))))
 
-(defmethod process-ux ((code list))
+(defmethod process-ux-arg ((form list) path)
+  (let ((name (intern (format nil "INLINE_~{~a~^_~}" (reverse path)))))
+    (pushnew name *js-vars-used*)
+    (pushnew (list name form) *js-inline-forms*)
+    (process-ux-arg name path)))
+
+(defmethod process-ux-arg (thing path)
+  thing)
+
+(defmethod process-ux ((code list) path)
   (let* ((head (first code))
          (name (etypecase head
                  (string head)
                  (symbol (name-to-camel (first code))))))
     `(,name
-       ,(process-args (second code))
-       ,@(mapcar #'process-ux (cddr code)))))
+       ,(process-args (second code) (cons :args path))
+       ,@(mapcar λ(process-ux _ (cons _1 path))
+                 (cddr code)
+                 (iota (length (cddr code)))))))
 
-(defmethod process-ux ((code symbol))
-  ;; (if (find code *js-vars*)
-  ;;     (var-to-ref code)
-  ;;     code)
+(defmethod process-ux ((code symbol) path)
   code)
 
-(defmethod process-ux (code)
+(defmethod process-ux (code path)
   code)
 
 ;;------------------------------------------------------------
