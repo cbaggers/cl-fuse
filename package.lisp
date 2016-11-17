@@ -249,7 +249,13 @@
 
 (uiop:define-package #:fuse
     (:use #:cl :xmls :uiop :fn :named-readtables :cl-ppcre :fuse.controls
-          :bordeaux-threads)
-
-  ;;(:import-from :alexandria)
-  )
+          :bordeaux-threads :quickproject)
+  (:export :debug-ux
+           :create-app-project
+           :preview-app
+           :def-fuse-app
+           :def-ux-component
+           :def-js-requires
+           :def-js-func
+           :def-js-var)
+  (:reexport :fuse.controls))

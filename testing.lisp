@@ -11,7 +11,7 @@
 
 
 
-(def-js-var some-text "This is working")
+(def-js-var some-text "This is still working")
 (def-js-var some-var (observable 30))
 
 (def-fuse-app ()

@@ -1,14 +1,16 @@
 (in-package :fuse)
 (in-readtable :fn.reader)
 
-(defparameter *app-file-name* "foo.ux")
+(defparameter *app-file-name* "MainView.ux")
+(defvar *app-dir-name* "fuse-app")
 
 (defun fuse-build-dir (&optional (package *package*))
   (let ((pname (asdf/package-inferred-system::package-name-system
                 (package-name package))))
     (if (eq t pname)
         (error "you cannot make a fuse app in package cl-user")
-        (asdf:system-relative-pathname pname "test"))))
+        (ensure-directory-pathname
+         (asdf:system-relative-pathname pname *app-dir-name*)))))
 
 (defun write-to-ux-file (file-name ux-string)
   (let ((abs (subpathname* (fuse-build-dir) file-name)))

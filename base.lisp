@@ -38,6 +38,28 @@
 
 (defvar *preview* nil)
 
+(defun create-app-project (name)
+  (let* ((name-str (typecase name
+                    (symbol (string-downcase (symbol-name name)))
+                    (otherwise name)))
+         (name (intern (string-upcase name-str) :keyword))
+         (template (ensure-directory-pathname
+                    (asdf:system-relative-pathname :fuse "project-template"))))
+    (quickproject:make-project name-str :depends-on '(:fuse)
+                               :template-directory template)
+    (funcall (symbol-function (find-symbol "QUICKLOAD" :ql)) name-str)
+    (let ((dir (fuse-build-dir name)))
+      (ensure-directories-exist dir)
+      (with-open-file (s (subpathname* dir *app-file-name*)
+                         :direction :output
+                         :if-does-not-exist :create)
+        (format s "<App>~%</App>~%"))
+      (with-open-file (s (subpathname* dir (format nil "~a.unoproj" name-str))
+                         :direction :output
+                         :if-does-not-exist :create)
+        (format s "{~%  \"RootNamespace\":\"\",~%  \"Packages\": [~%      \"Fuse\",~%      \"FuseJS\"~%  ],~%  \"Includes\": [~%    \"*\"~%  ]~%}"))
+      dir)))
+
 (defun preview-app ()
   (let ((dir (fuse-build-dir)))
     (if (and *preview* (thread-alive-p *preview*))
@@ -158,7 +180,7 @@
 ;;------------------------------------------------------------
 
 (defmacro def-js-requires (&body requires)
-  `(defparameter *package-js-requires*
+  `(defparameter ,(intern "*PACKAGE-JS-REQUIRES*" *package*)
      ',(mapcar λ(destructuring-bind (req var-name) _
                   (assert (or (symbolp req) (stringp req)))
                   (assert (symbolp var-name))
