@@ -30,5 +30,6 @@ This variable specifies both what was expanded and how.")
     (goto-char (point-min))
     (font-lock-fontify-buffer)))
 
+(define-key lisp-mode-map (kbd "C-c f") 'slime-fuse-expand)
 
 ;;--------------------

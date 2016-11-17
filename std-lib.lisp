@@ -7,7 +7,9 @@
       (float3 "float4")
       (float4 "float4")))
   (defparameter std-lib-macro-map
-    '((activated "Activated")
+    '((scale "Scale")
+      (move "Move")
+      (activated "Activated")
       (activating-animation "ActivatingAnimation")
       (adding-animation "AddingAnimation")
       (alternate-root "AlternateRoot")
@@ -137,6 +139,7 @@
       (right-frame-background "RightFrameBackground")
       (root-viewport "RootViewport")
       (rotate-gesture "RotateGesture")
+      (rotate "Rotate")
       (rotation "Rotation")
       (router "Router")
       (scaling "Scaling")

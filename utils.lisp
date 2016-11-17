@@ -8,6 +8,9 @@
 
 (defun name-to-camel (symb &optional (qualify t))
   (assert (symbolp symb))
+  ;;(format t "~%~a:~a" (package-name (symbol-package symb)) symb)
+  (when (find symb fuse.controls::std-lib-macro-map :key #'first)
+    (setf qualify nil))
   (or (second (find symb fuse.controls::std-lib-name-map :key #'first))
       (labels ((str-camel (x)
                  (apply #'concatenate 'string

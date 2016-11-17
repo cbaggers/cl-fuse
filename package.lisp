@@ -3,6 +3,9 @@
 (uiop:define-package #:fuse.controls
     (:use :cl)
   (:export
+   :scale
+   :move
+   :rotate
    :activated
    :activating-animation
    :adding-animation
@@ -259,6 +262,7 @@
            :def-js-func
            :def-js-var
            :def
+           :require-js
            :->)
   (:import-from :alexandria
                 :flatten

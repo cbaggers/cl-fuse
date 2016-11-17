@@ -64,7 +64,7 @@
       (with-open-file (s (subpathname* dir (format nil "~a.unoproj" name-str))
                          :direction :output
                          :if-does-not-exist :create)
-        (format s "{~%  \"RootNamespace\":\"\",~%  \"Packages\": [~%      \"Fuse\",~%      \"FuseJS\"~%  ],~%  \"Includes\": [~%    \"*\"~%  ]~%}"))
+        (format s "{~%  \"RootNamespace\":\"\",~%  \"Packages\": [~%      \"Fuse\",~%      \"FuseJS\"~%  ],~%  \"Includes\": [~%    \"*\",~%        \"*.js:Bundle\"~%  ]~%}"))
       dir)))
 
 (defun preview-app (&optional package-name)
@@ -83,12 +83,11 @@
       (uiop:run-program (format nil "fuse preview ~a &" dir)
                         :output o :error-output eo))))
 
-(defmacro def-fuse-app ((&key todo) &body body-form)
-  (declare (ignore todo))
+(defmacro def-fuse-app (args &body body-form)
   (assert (= (length body-form) 1))
-  `(%ux-app ',(first body-form)))
+  `(%ux-app ',args ',(first body-form)))
 
-(defun %ux-app (body)
+(defun %ux-app (args body)
   (let* ((*js-vars-used* nil)
          (*js-inline-forms* nil)
          (body (process-ux body nil))
@@ -96,7 +95,10 @@
          (js-imports (let ((file (gen-ux-js-import-file imp-name *js-vars-used*)))
                        (when file
                          `(("JavaScript" (("File" ,(namestring file))))))))
-         (code `("App" ()
+         (code `("App" ,(when args
+                              (group
+                               (mapcar λ(process-ux-arg _ nil) args)
+                               2))
                        ,@js-imports
                        ,body))
          (ux (code-to-ux code)))
@@ -127,7 +129,18 @@
 
 (defmacro def-ux-component (name properties dependencies &body body-form)
   (assert (= (length body-form) 1))
-  `(%ux-comp ',name ',properties ',dependencies ',(first body-form)))
+  (let* ((arg-names (append (mapcar #'first properties)
+                            (mapcar #'first dependencies)))
+         (args (if arg-names
+                   (cons '&key arg-names)
+                   'args)))
+    `(progn
+       (defmacro ,name (,args &body body)
+         ,(if arg-names
+              `(declare (ignore ,@arg-names body))
+              `(declare (ignore args body)))
+         (warn "foo"))
+       (%ux-comp ',name ',properties ',dependencies ',(first body-form)))))
 
 (defun %ux-comp (name properties dependencies body)
   (declare (ignore dependencies))
@@ -178,16 +191,30 @@
 
 (defun process-args (args path)
   (when args
-    (group (mapcar λ(process-ux-arg _ (cons _1 path))
-                   args
-                   (iota (length args)))
-           2)))
+    (let ((args (group args 2)))
+      (mapcar λ(process-ux-arg-pair _ (cons _1 path))
+              args
+              (iota (length args))))))
 
 (defun var-to-ref (symb)
   (format nil "{~a}" (name-to-camel symb nil)))
 
 (defun var-to-prop (symb)
   (format nil "{Property this.~a}" (name-to-camel symb nil)))
+
+(defmethod process-ux-arg-pair (pair path)
+  (assert (keywordp (first pair)))
+  (list (process-ux-key (first pair))
+        (process-ux-arg (second pair) path)))
+
+(defvar *name-special-case*
+  '((:name . "ux:Name")
+    (:template . "ux:Template")
+    (:class . "ux:Class")))
+
+(defmethod process-ux-key (key)
+  (or (cdr (assoc key *name-special-case*))
+      (process-ux-arg key nil)))
 
 (defmethod process-ux-arg ((symb symbol) path)
   (cond
@@ -201,6 +228,16 @@
     (pushnew name *js-vars-used*)
     (pushnew (list name form) *js-inline-forms*)
     (process-ux-arg name path)))
+
+(defmethod process-ux-arg ((thing number) path)
+  (format nil "~a" thing))
+
+(defmethod process-ux-arg ((thing vector) path)
+  (format nil "~{~a~^, ~}" (concatenate 'list thing)))
+
+(defmethod process-ux-arg ((thing string) path)
+  thing)
+
 
 (defmethod process-ux-arg (thing path)
   thing)
@@ -223,6 +260,9 @@
   code)
 
 ;;------------------------------------------------------------
+
+(defmacro require-js (&body requires)
+  `(def-js-requires ,@requires))
 
 (defmacro def-js-requires (&body requires)
   `(defparameter ,(intern "*PACKAGE-JS-REQUIRES*" *package*)
@@ -290,7 +330,7 @@
   (when vars
     (let* ((filename (var-name-to-js-filename name nil))
            (abs-file-name (var-name-to-js-filename name t))
-           (reqs (%gen-js-requires nil vars nil))
+           (reqs (%gen-js-requires nil (reverse vars) nil))
            (js-code
             (parenscript:ps*
              `(progn
@@ -336,7 +376,9 @@
   (if form
       (let ((req (find-symbol "*PACKAGE-JS-REQUIRES*" (symbol-package name))))
         (unless *debug* (notice-js-var-name name))
-        `(%def-js-var ',name ',form ,req))
+        `(progn
+           (%def-js-var ',name ',form ,req)
+           (defvar ,name)))
       (unless *debug*
         (forget-js-var-name name))))
 
