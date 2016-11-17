@@ -7,20 +7,21 @@
 
 
 (defun name-to-camel (symb &optional (qualify t))
-  (assert (and (symbolp symb) (symbol-package symb)))
+  (assert (symbolp symb))
   (or (second (find symb fuse.controls::std-lib-name-map :key #'first))
       (labels ((str-camel (x)
                  (apply #'concatenate 'string
                         (mapcar λ(format nil "~a~a" (char _ 0)
                                          (string-downcase (subseq _ 1)))
                                 (split-string x :separator '(#\-))))))
-        (let* ((name (str-camel (symbol-name symb)))
-               (pack-name (package-name (symbol-package symb)))
-               (pack-split (split-string pack-name :separator #(#\. #\-)))
-               (package (format nil "~{~a~^.~}" (mapcar #'str-camel pack-split))))
+        (let* ((name (str-camel (symbol-name symb))))
           (if (or (keywordp symb) (not qualify))
               name
-              (format nil "~a.~a" package name))))))
+              (let* ((pack-name (package-name (symbol-package symb)))
+                     (pack-split (split-string pack-name :separator #(#\. #\-)))
+                     (package (format nil "~{~a~^.~}"
+                                      (mapcar #'str-camel pack-split))))
+               (format nil "~a.~a" package name)))))))
 
 (defmacro dbind (lambda-list expression &body body)
   `(destructuring-bind ,lambda-list ,expression ,@body))

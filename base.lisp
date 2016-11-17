@@ -26,8 +26,6 @@
 ;;------------------------------------------------------------
 
 (defun code-to-ux (code)
-  (when *debug*
-    (print code))
   (let ((xml (toxml code :indent t)))
     (when *debug*
       (format t "~%~%~a" xml))
@@ -68,11 +66,15 @@
         (format s "{~%  \"RootNamespace\":\"\",~%  \"Packages\": [~%      \"Fuse\",~%      \"FuseJS\"~%  ],~%  \"Includes\": [~%    \"*\"~%  ]~%}"))
       dir)))
 
-(defun preview-app ()
-  (let ((dir (fuse-build-dir)))
+(defun preview-app (&optional package-name)
+  (let ((dir (fuse-build-dir (if package-name
+                                 (find-package package-name)
+                                 *package*))))
     (if (and *preview* (thread-alive-p *preview*))
         (warn "preview is already running")
-        (setf *preview* (make-thread λ(%run-preview dir) :name "Fuse-Preview")))))
+        (progn
+          (format t "~%starting preview: ~a" dir)
+          (setf *preview* (make-thread λ(%run-preview dir) :name "Fuse-Preview"))))))
 
 (defun %run-preview (dir)
   (with-open-stream (o (make-string-output-stream))
@@ -86,18 +88,25 @@
   `(%ux-app ',(first body-form)))
 
 (defun %ux-app (body)
-  (with-dbg-print
-    (let* ((*js-vars-used* nil)
-           (*js-funcs-used* nil)
-           (body (process-ux body))
-           (js-imports (let ((files (calc-js-files-used *js-vars-used* *js-funcs-used*)))
-                         (mapcar λ`("JavaScript" (("File" ,(namestring _)))) files)))
-           (code `("App" ()
-                         ,@js-imports
-                         ,body))
-           (ux (code-to-ux code)))
-      (unless *debug*
-        (write-to-ux-file *app-file-name* ux)))))
+  (let* ((*js-vars-used* nil)
+         (body (process-ux body))
+         (imp-name 'app-mainview)
+         (js-imports (let ((file (gen-ux-js-import-file imp-name *js-vars-used*)))
+                       (when file
+                         `(("JavaScript" (("File" ,(namestring file))))))))
+         (code `("App" ()
+                       ,@js-imports
+                       ,body))
+         (ux (code-to-ux code)))
+    (unless *debug*
+      (write-to-ux-file *app-file-name* ux))))
+
+;;------------------------------------------------------------
+
+(defmacro def (name args/val &body body)
+  (if body
+      `(def-js-func ,name ,args/val ,@body)
+      `(def-js-var ,name ,args/val)))
 
 ;;------------------------------------------------------------
 
@@ -107,21 +116,21 @@
 
 (defun %ux-comp (name properties dependencies body)
   (declare (ignore dependencies))
-  (with-dbg-print
-    (let* ((*js-vars-used* nil)
-           (*js-funcs-used* nil)
-           (*properties* (mapcar #'first properties))
-           (body (process-ux body))
-           (js-imports (let ((files (calc-js-files-used *js-vars-used* *js-funcs-used*)))
-                         (mapcar λ`("JavaScript" (("File" ,(namestring _)))) files)))
-           (code (add-ux-class-name name body))
-           (code (add-properties-to-component code properties))
-           (code (add-imports-to-component code js-imports))
-           (ux (code-to-ux code))
-           (filename (comp-name-to-ux-filename name)))
-      (if *debug*
-          (format t "~%Will write to ~a" filename)
-          (write-to-ux-file filename ux)))))
+  (let* ((*js-vars-used* nil)
+         (*properties* (mapcar #'first properties))
+         (body (process-ux body))
+         (imp-name (make-symbol (format nil "component-~a" name)))
+         (js-imports (let ((file (gen-ux-js-import-file imp-name *js-vars-used*)))
+                       (when file
+                         `(("JavaScript" (("File" ,(namestring file))))))))
+         (code (add-ux-class-name name body))
+         (code (add-properties-to-component code properties))
+         (code (add-imports-to-component code js-imports))
+         (ux (code-to-ux code))
+         (filename (comp-name-to-ux-filename name)))
+    (if *debug*
+        (format t "~%Will write to ~a" filename)
+        (write-to-ux-file filename ux))))
 
 (defun add-ux-class-name (name code)
   (let ((new-sec (cons `("ux:Class" ,(name-to-camel name)) (second code))))
@@ -229,16 +238,44 @@
    (remove-if-not λ(find _ *js-funcs*) (flatten code))))
 
 (defun gen-js-requires (code package-requires)
-  (append (mapcar λ(dbind (req var) _
-                     `(defvar ,var (parenscript:getprop (require ,req)
-                                                        ,(name-to-camel var nil))))
-                  (append (mapcar λ`(,(func-name-to-js-filename _ nil) ,_)
-                                  (sweep-for-funcs code))
-                          (mapcar λ`(,(var-name-to-js-filename _ nil) ,_)
-                                  (sweep-for-vars code))))
-          (mapcar λ(dbind (req var) _
-                     `(defvar ,var (require ,req)))
-          package-requires)))
+  (%gen-js-requires (sweep-for-funcs code)
+                    (sweep-for-vars code)
+                    package-requires))
+
+(defun %gen-js-requires (funcs vars package-requires)
+  (labels ((gen-req (var is-func?)
+             (let* ((file (if is-func?
+                              (func-name-to-js-filename var nil)
+                              (var-name-to-js-filename var nil)))
+                    (symb (make-symbol (name-to-camel var nil))))
+               `(defvar ,symb (require ,file)))))
+    (values
+     (append (mapcar λ(dbind (req var) _ `(defvar ,var (require ,req)))
+                     package-requires)
+             (mapcar λ(gen-req _ t) funcs)
+             (mapcar λ(gen-req _ nil) vars))
+     (mapcar λ(list _ `(-> ,(make-symbol (name-to-camel _ nil))
+                           ,(name-to-camel _ nil)))
+             (append funcs vars)))))
+
+(defun gen-ux-js-import-file (name vars)
+  (when vars
+    (let* ((filename (var-name-to-js-filename name nil))
+           (abs-file-name (var-name-to-js-filename name t))
+           (reqs (%gen-js-requires nil vars nil))
+           (js-code
+            (parenscript:ps*
+             `(progn
+                ,@reqs
+                ,@(mapcar
+                   λ(let ((var (second _)))
+                      `(setf (parenscript:chain module exports ,var)
+                             (parenscript:chain ,var ,var)))
+                   reqs)))))
+      (if *debug*
+          (format t "~%~a~%~%Will write to ~a" js-code abs-file-name)
+          (write-to-js-file abs-file-name js-code))
+      filename)))
 
 ;;------------------------------------------------------------
 
@@ -248,18 +285,19 @@
     `(%def-js-func ',name ',args ',body ,req)))
 
 (defun gen-js-func-code (name args body requires)
-  `(progn
-     ,@(gen-js-requires body requires)
-     (defun ,name ,args ,@body)
-     (setf (parenscript:chain module exports ,(name-to-camel name nil)) ,name)))
-
+  (vbind (reqs macros) (gen-js-requires body requires)
+    `(progn
+       ,@reqs
+       (defun ,name ,args
+         (symbol-macrolet ,macros
+           ,@body))
+       (setf (parenscript:chain module exports ,(name-to-camel name nil)) ,name))))
 
 (defun %def-js-func (name args body requires)
   (let* ((js-code (parenscript:ps* (gen-js-func-code name args body requires)))
          (filename (func-name-to-js-filename name)))
     (if *debug*
-        (with-dbg-print
-          (format t "~%~a~%~%Will write to ~a" js-code filename))
+        (format t "~%~a~%~%Will write to ~a" js-code filename)
         (write-to-js-file filename js-code))))
 
 ;;------------------------------------------------------------
@@ -275,15 +313,20 @@
         (forget-js-var-name name))))
 
 (defun gen-js-var-code (name form requires)
-  `(progn
-     ,@(gen-js-requires form requires)
-     (setf (parenscript:chain module exports ,(name-to-camel name nil)) ,form)))
+  (vbind (reqs macros) (gen-js-requires form requires)
+    `(progn
+       ,@reqs
+       (symbol-macrolet ,macros
+         (setf (parenscript:chain module exports ,(name-to-camel name nil))
+               ,form)))))
 
 
 (defun %def-js-var (name form requires)
   (let* ((js-code (parenscript:ps* (gen-js-var-code name form requires)))
          (filename (var-name-to-js-filename name)))
     (if *debug*
-        (with-dbg-print
-          (format t "~%~a~%~%Will write to ~a" js-code filename))
+        (format t "~%~a~%~%Will write to ~a" js-code filename)
         (write-to-js-file filename js-code))))
+
+(parenscript:defpsmacro -> (&rest args)
+  `(parenscript:getprop ,@args))

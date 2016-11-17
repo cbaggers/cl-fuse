@@ -257,7 +257,9 @@
            :def-ux-component
            :def-js-requires
            :def-js-func
-           :def-js-var)
+           :def-js-var
+           :def
+           :->)
   (:import-from :alexandria
                 :flatten)
   (:reexport :fuse.controls))
