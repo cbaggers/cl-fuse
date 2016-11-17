@@ -9,6 +9,14 @@
   `(let ((*debug* t))
      ,@body))
 
+(defun fuse-expand-all (foo)
+  (with-output-to-string (s)
+    (let ((*standard-output* s))
+      (funcall (compile nil `(lambda () (debug-ux ,foo)))))))
+
+(swank::defslimefun expand-all (string)
+  (swank::apply-macro-expander #'fuse-expand-all string))
+
 (defmacro with-dbg-print (&body body)
   `(progn
      (when *debug* (format t "~%-----------~%"))
