@@ -148,7 +148,8 @@
          (*js-inline-forms* nil)
          (*properties* (mapcar #'first properties))
          (body (process-ux body nil))
-         (imp-name (make-symbol (format nil "component-~a" name)))
+         (imp-name (intern (format nil "component-~a" name)
+                           (symbol-package name)))
          (js-imports (let ((file (gen-ux-js-import-file imp-name *js-vars-used*)))
                        (when file
                          `(("JavaScript" (("File" ,(namestring file))))))))
